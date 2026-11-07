@@ -4,8 +4,13 @@ const COLS = ['games', 'entries', 'config', 'tambola', 'ootd'];
 let ready;
 
 function sqlClient() {
-  const url = process.env.DATABASE_URL || process.env.POSTGRES_URL;
-  if (!url) throw new Error('DATABASE_URL is not set');
+  const env = process.env;
+  let url = env.DATABASE_URL || env.POSTGRES_URL;
+  if (!url) {
+    const key = Object.keys(env).find((k) => /(DATABASE|POSTGRES).*URL$/.test(k) && !/(UNPOOLED|NON_POOLING|NO_SSL)/.test(k) && /^postgres/.test(env[k] || ''));
+    if (key) url = env[key];
+  }
+  if (!url) throw new Error('No Neon connection string found in the environment variables (looked for DATABASE_URL)');
   return neon(url);
 }
 
@@ -73,6 +78,6 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'method not allowed' });
   } catch (e) {
     console.error(e);
-    return res.status(500).json({ error: 'server error' });
+    return res.status(500).json({ error: 'server error', detail: String((e && e.message) || e).slice(0, 300) });
   }
 }

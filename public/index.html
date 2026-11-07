@@ -209,7 +209,9 @@ var RAW=[
 ['BSC/157','M Dhanush',24,'M','A'],['BSC/160','Rajasekar',34,'M','B'],['BSC/162','S Swetha',27,'F','B'],
 ['BSC/165','Divya A',21,'F','A'],['BSC/167','Suriyadevan J',25,'M','A'],['BSC/171','Swathika K',20,'F','A'],
 ['TRN 1','Subashree Lavanya',21,'F','B'],['TRN 2','Priyadharshini',21,'F','B']];
-var ROSTER=RAW.map(function(r){return{id:r[0].replace('BSC/','b').replace('TRN ','trn').toLowerCase(),emp:r[0],name:r[1],age:r[2],g:r[3],team:r[4]}});
+var ROSTER0=RAW.map(function(r){return{id:r[0].replace('BSC/','b').replace('TRN ','trn').toLowerCase(),emp:r[0],name:r[1],age:r[2],g:r[3],team:r[4]}});
+var ROSTER=ROSTER0.slice();
+function syncRoster(){var x=((DATA.config.roster||{}).extra)||{};ROSTER=ROSTER0.concat(Object.keys(x).filter(function(k){return x[k]&&x[k].name}).sort().map(function(k){var p=x[k];return{id:k,emp:p.emp||'Added on the day',name:p.name,age:p.age||'-',g:p.g,team:p.team,extra:1}}))}
 
 var GAMES=[
 {id:'hook',heats:1,n:1,name:'Hook and Grab',cat:'Women individual',kind:'ind',who:'F',metric:{type:'count',better:'high',unit:'straws',label:'Straws moved'},stages:['Batches','Heat 1','Heat 2','Final'],advance:2,
@@ -319,8 +321,8 @@ function vBoard(){
   var next=GAMES.filter(function(g){return status(g)==='live'})[0],lab='Playing now';
   if(!next){next=GAMES.filter(function(g){return status(g)!=='done'})[0];lab='Up next'}
   var h='<div class="page-h"><div class="eyebrow">Saturday 7 November 2026</div><h1 class="h1">Scoreboard</h1></div>';
-  h+='<div class="score"><div class="sc a"><div class="sc-l">TEAM A</div><div class="sc-n">'+fmtP(t.A)+'</div><div class="sc-s">16 players</div></div>'+
-     '<div class="sc b"><div class="sc-l">TEAM B</div><div class="sc-n">'+fmtP(t.B)+'</div><div class="sc-s">16 players</div></div></div>';
+  h+='<div class="score"><div class="sc a"><div class="sc-l">TEAM A</div><div class="sc-n">'+fmtP(t.A)+'</div><div class="sc-s">'+presentPlayers().filter(function(p){return teamOf(p.id)==='A'}).length+' players</div></div>'+
+     '<div class="sc b"><div class="sc-l">TEAM B</div><div class="sc-n">'+fmtP(t.B)+'</div><div class="sc-s">'+presentPlayers().filter(function(p){return teamOf(p.id)==='B'}).length+' players</div></div></div>';
   h+='<div class="bar" role="img" aria-label="Share of points, Team A blue and Team B gold"><i style="width:'+(sum?t.A/sum*100:50)+'%"></i></div>';
   h+='<p class="lead">'+msg+'</p><p class="muted">Team games decided: '+t.played+' of 4. Points still to play: '+fmtP(t.left)+'. Individual games and Tambola give prizes only.</p>';
   if(next)h+='<div class="next"><div class="grow"><div class="eyebrow">'+lab+'</div><div class="h2">'+esc(next.n+'. '+next.name)+'</div></div><a class="btn" href="#g-'+next.id+'">Open</a></div>';
@@ -435,7 +437,7 @@ function finishBar(g,ready){var st=status(g);
 function vTeam(g){
   var d=gdoc(g.id),locked=d.status==='done',h=gHead(g);
   var batch=ui.batch[g.id]||(g.batches?g.batches[0]:'Run');if(g.batches&&g.batches.indexOf(batch)<0)batch=g.batches[0];
-  h+='<div class="sec"><div class="sec-h"><h2 class="h2">Timers</h2><small>Teams: 16 players each</small></div><div class="btns"><button class="btn go" data-a="tboth" data-m="start">Start both</button><button class="btn stop" data-a="tboth" data-m="stop">Stop both</button></div>';
+  h+='<div class="sec"><div class="sec-h"><h2 class="h2">Timers</h2><small>Team A and Team B</small></div><div class="btns"><button class="btn go" data-a="tboth" data-m="start">Start both</button><button class="btn stop" data-a="tboth" data-m="stop">Stop both</button></div>';
   if(g.batches)h+='<div class="chips" role="group" aria-label="Batch">'+g.batches.map(function(b){return '<button class="chip '+(batch===b?'on':'')+'" data-a="tbatch" data-v="'+b+'" aria-pressed="'+(batch===b)+'">'+b+'</button>'}).join('')+'</div>';
   h+='<div class="clocks'+(locked?' lock':'')+'">';
   ['A','B'].forEach(function(t){
@@ -481,9 +483,10 @@ function vPlayers(){
   var pr=presentPlayers(),c=function(t){return pr.filter(function(p){return teamOf(p.id)===t}).length};
   var h='<div class="page-h"><div class="eyebrow">'+pr.length+' present · Team A '+c('A')+' · Team B '+c('B')+'</div><h1 class="h1">Players</h1></div>';
   h+='<div class="chips" style="margin-top:12px" role="group" aria-label="Filter">'+[['all','All'],['A','Team A'],['B','Team B'],['M','Men'],['F','Women']].map(function(x){return '<button class="chip '+(f===x[0]?'on':'')+'" data-a="filter" data-v="'+x[0]+'" aria-pressed="'+(f===x[0])+'">'+x[1]+'</button>'}).join('')+'</div>';
+  h+='<div class="sec"><h2 class="h2">Add a player</h2><label class="lbl" for="np-name">Name</label><input class="fld" id="np-name" placeholder="Full name" autocomplete="off"><div class="btns" style="margin-top:8px"><select class="fld sm" id="np-g" aria-label="Gender"><option value="M">Man</option><option value="F">Woman</option></select><select class="fld sm" id="np-t" aria-label="Team"><option value="A">Team A</option><option value="B">Team B</option></select></div><button class="btn blue full" data-a="addp" style="margin-top:8px">Add player</button></div>';
   h+='<ul class="list pl" style="margin-top:12px">'+pl.map(function(p){var off=isAbsent(p.id),w=prizesOf(p.id);
     return '<li class="'+(off?'off':'')+'">'+tb(teamOf(p.id))+'<div class="grow"><b class="nm">'+esc(p.name)+'</b><small>'+esc(p.emp)+' · '+(p.g==='M'?'Man':'Woman')+', '+p.age+(off?' · Absent':'')+'</small>'+(w.length?'<div class="wins">'+w.map(function(x){return '<span class="badge">'+esc(x)+'</span>'}).join('')+'</div>':'')+'</div>'+
-      '<button class="btn ghost" data-a="swap" data-p="'+p.id+'" aria-label="Move '+esc(p.name)+' to the other team">Swap</button><button class="btn ghost" data-a="absent" data-p="'+p.id+'">'+(off?'Present':'Absent')+'</button></li>'}).join('')+'</ul>';
+      (p.extra?'<button class="btn ghost" data-a="rmp" data-p="'+p.id+'">Remove</button>':'')+'<button class="btn ghost" data-a="swap" data-p="'+p.id+'" aria-label="Move '+esc(p.name)+' to the other team">Swap</button><button class="btn ghost" data-a="absent" data-p="'+p.id+'">'+(off?'Present':'Absent')+'</button></li>'}).join('')+'</ul>';
   return h+'<p class="muted" style="margin-top:12px">Absent players are hidden from every game. Swap moves a player to the other team for the whole event.</p>';
 }
 function prizesOf(pid){var o=[];GAMES.forEach(function(g){var d=gdoc(g.id);if(g.kind==='ind'){if(d.win===pid)o.push(g.name+': winner');if(d.run===pid)o.push(g.name+': runner-up')}});
@@ -553,7 +556,7 @@ function vSetup(){
 var TABS=[['board','Board'],['games','Games'],['players','Players'],['prizes','Prizes'],['finale','Finale']];
 function route(){var h=location.hash.replace('#','')||'board';return h.indexOf('g-')===0?{tab:'games',gid:h.slice(2)}:{tab:h,gid:null}}
 function render(){
-  var app=document.getElementById('app');if(!app)return;var r=route(),y=window.scrollY,v;
+  var app=document.getElementById('app');if(!app)return;syncRoster();var r=route(),y=window.scrollY,v;
   if(r.gid){var g=G(r.gid);v=!g?vGames():g.kind==='ind'?vInd(g):g.kind==='team'?vTeam(g):vTambola(g)}
   else{var VIEWS={board:vBoard,games:vGames,players:vPlayers,prizes:vPrizes,finale:vFinale,setup:vSetup};v=(VIEWS[r.tab]||vBoard)()}
   var sync={live:['live','Live sync'],local:['local','This phone only'],err:['err','Not saving'],connecting:['','Connecting']}[mode];
@@ -607,6 +610,9 @@ var A={
  assign:function(d){var k=d.key.split(':');var col=k[0]==='t'?'tambola':'ootd';put(col,k[1],{pid:d.p||null,given:false});ui.pick=null;render()},
  filter:function(d){ui.filter=d.v;render()},
  absent:function(d){var o={};o[d.p]=!isAbsent(d.p);put('config','roster',{absent:o})},
+ addp:function(){var n=(document.getElementById('np-name').value||'').trim();if(!n){toast('Enter the player name');return}
+   var id='x'+uid(),o={};o[id]={name:n,g:document.getElementById('np-g').value,team:document.getElementById('np-t').value,emp:'Added on the day',age:'-'};put('config','roster',{extra:o});toast('Added '+n)},
+ rmp:function(d){var o={};o[d.p]=null;put('config','roster',{extra:o})},
  swap:function(d){var o={};o[d.p]=teamOf(d.p)==='A'?'B':'A';put('config','roster',{team:o})},
  tb:function(d){put('config','final',{tb:d.v||null})},
  showstart:function(){ui.show={i:0};document.body.style.overflow='hidden';render()},
