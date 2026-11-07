@@ -293,6 +293,7 @@ function bestBy(g,es){var best={};es.forEach(function(e){if(!(e.pid in best))bes
   var list=Object.keys(best).map(function(p){return{pid:p,v:best[p]}}).sort(function(a,b){return better(g,a.v,b.v)||pname(a.pid).localeCompare(pname(b.pid))});
   var r=1;list.forEach(function(x,i){if(i>0&&better(g,x.v,list[i-1].v)!==0)r=i+1;x.rank=r});return list}
 function rankInd(g){var es=entriesOf(g.id).filter(function(e){return e.pid});var fin=es.filter(function(e){return e.stage==='Final'});return bestBy(g,fin.length?fin:es)}
+function stagesOf(g){if(!g.heats)return g.stages;var n=(cfg('heatn')||{})[g.id];if(!n)n=g.stages.filter(function(x){return x.indexOf('Heat')===0}).length;return ['Batches'].concat(Array.apply(null,Array(n)).map(function(_,k){return 'Heat '+(k+1)}),['Final'])}
 function HEATG(){return GAMES.filter(function(g){return g.kind==='ind'&&g.stages.indexOf('Final')>-1&&g.id!=='bindi'})}
 function adv(g){var o=(cfg('adv')||{})[g.id];return o!=null?o:(g.advance||0)}
 function qualifiers(g){var out={};if(!adv(g))return out;var es=entriesOf(g.id).filter(function(e){return e.pid&&e.stage!=='Final'});
@@ -353,16 +354,17 @@ function clockCard(g,key,label,extra){var run=running(g.id,key);
   '<div class="row"><button class="btn '+(run?'stop':'go')+'" data-a="'+(run?'tstop':'tstart')+'" data-k="'+key+'">'+(run?'Stop':'Start')+'</button><button class="btn ghost" data-a="treset" data-k="'+key+'">Reset</button></div>'+(extra||'')+'</div>'}
 
 function vHeats(g){
-  var d=gdoc(g.id),locked=d.status==='done',e=ui.e(g.id);if(!e.stage||g.stages.indexOf(e.stage)<0)e.stage=g.stages[0];
-  var heats=g.stages.filter(function(x){return x.indexOf('Heat')===0});
+  var d=gdoc(g.id),locked=d.status==='done',e=ui.e(g.id);var ST=stagesOf(g);if(!e.stage||ST.indexOf(e.stage)<0)e.stage=ST[0];
+  var heats=ST.filter(function(x){return x.indexOf('Heat')===0});
   var ents=entriesOf(g.id).filter(function(x){return x.pid&&x.stage!=='Final'}),by={};ents.forEach(function(x){by[x.pid]=x});
   var fin=ents.filter(function(x){return x.v===1}),n=adv(g),h=gHead(g);
   if(g.id==='coin')h+='<div class="sec"><h2 class="h2">Stopwatch</h2>'+clockCard(g,'s','Stopwatch')+'</div>';
   h+='<div class="sec'+(locked?' lock':'')+'"><div class="sec-h"><h2 class="h2">'+esc(e.stage)+'</h2><small>'+ents.length+' in heats, '+fin.length+' in the final</small></div>';
-  h+='<div class="chips" role="group" aria-label="Round">'+g.stages.map(function(s){return '<button class="chip '+(e.stage===s?'on':'')+'" data-a="estage" data-v="'+s+'" aria-pressed="'+(e.stage===s)+'">'+s+'</button>'}).join('')+'</div>';
+  h+='<div class="chips" role="group" aria-label="Round">'+ST.map(function(s){return '<button class="chip '+(e.stage===s?'on':'')+'" data-a="estage" data-v="'+s+'" aria-pressed="'+(e.stage===s)+'">'+s+'</button>'}).join('')+'</div>';
   if(e.stage==='Batches'){
     var bs=ui.bsel&&ui.bsel[g.id]||heats[0];
     var list=presentPlayers(g.who).sort(function(a,b){return a.name.localeCompare(b.name)});
+    h+='<div class="step" style="margin-bottom:8px"><span class="grow"><b>Number of heats: '+heats.length+'</b><br><small class="muted">Add a heat if you cannot fit 6 to 8 players in one.</small></span><button class="btn ghost sq" data-a="hn" data-d="-1" aria-label="One heat fewer">&minus;</button><button class="btn ghost sq" data-a="hn" data-d="1" aria-label="One more heat">+</button></div>';
     h+='<p class="muted">Step 1. Choose a heat, then tap the players who play in it. Tap a player again to remove them.</p>';
     h+='<div class="chips" role="group" aria-label="Heat to fill">'+heats.map(function(x){var c=ents.filter(function(y){return y.stage===x}).length;return '<button class="chip '+(bs===x?'on':'')+'" data-a="bsel" data-v="'+x+'" aria-pressed="'+(bs===x)+'">'+x+' ('+c+')</button>'}).join('')+'</div>';
     h+='<div class="pgrid">'+list.map(function(p){var x=by[p.id],on=x&&x.stage===bs,other=x&&!on;
@@ -581,10 +583,14 @@ var A={
  tboth:function(d){var g=gidNow();['A','B'].forEach(function(k){if(d.m==='start'){if(!running(g,k))setTimer(g,k,{acc:elapsed(g,k),at:Date.now()})}else if(running(g,k))setTimer(g,k,{acc:elapsed(g,k),at:null})});if(d.m==='start')markLive(g)},
  tbatch:function(d){ui.batch[gidNow()]=d.v;render()},
  estage:function(d){ui.e(gidNow()).stage=d.v;render()},
- hbatch:function(d){var gid=gidNow(),g=G(gid);if(gdoc(gid).status==='done')return;var heats=g.stages.filter(function(x){return x.indexOf('Heat')===0});
+ hbatch:function(d){var gid=gidNow(),g=G(gid);if(gdoc(gid).status==='done')return;var heats=stagesOf(g).filter(function(x){return x.indexOf('Heat')===0});
    ui.bsel=ui.bsel||{};var bs=ui.bsel[gid]||heats[0];var ex=entriesOf(gid).filter(function(x){return x.pid===d.p&&x.stage!=='Final'});
    if(ex.length&&ex[0].stage===bs){ex.forEach(function(x){del('entries',x.id)});var gd=gdoc(gid),u={};if(gd.win===d.p)u.win=null;if(gd.run===d.p)u.run=null;if('win' in u||'run' in u)put('games',gid,u);return}
    ex.forEach(function(x){del('entries',x.id)});put('entries',uid(),{gid:gid,stage:bs,pid:d.p,v:0,at:Date.now()});markLive(gid)},
+ hn:function(d){var gid=gidNow(),g=G(gid);if(gdoc(gid).status==='done')return;var cur=stagesOf(g).length-2,n=cur+parseInt(d.d,10);
+   if(n<1||n>8){toast(n<1?'At least one heat is needed':'Up to 8 heats');return}
+   if(n<cur&&entriesOf(gid).some(function(x){return x.pid&&x.stage==='Heat '+cur})){toast('Heat '+cur+' still has players. Move or remove them first.');return}
+   var o={};o[gid]=n;put('config','heatn',o);ui.bsel=ui.bsel||{};if(ui.bsel[gid]&&parseInt(ui.bsel[gid].replace('Heat ',''),10)>n)ui.bsel[gid]='Heat '+n},
  bsel:function(d){ui.bsel=ui.bsel||{};ui.bsel[gidNow()]=d.v;render()},
  hfin:function(d){var gid=gidNow();if(gdoc(gid).status==='done')return;var x=DATA.entries[d.id];if(!x)return;
    var nv=x.v===1?0:1;put('entries',d.id,{v:nv});if(nv===0){var gd=gdoc(gid),u={};if(gd.win===x.pid)u.win=null;if(gd.run===x.pid)u.run=null;if('win' in u||'run' in u)put('games',gid,u)}markLive(gid)},
